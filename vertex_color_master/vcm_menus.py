@@ -163,8 +163,8 @@ def draw_brush_settings(context, layout, obj, settings, mode='STANDARD', pie=Fal
         row.operator('paint.vertex_color_set', text="Fill With Value")
     else:
         row = col.row(align=True)
-        row.prop(brush, 'color', text="")
-        row.prop(brush, 'secondary_color', text="")
+        row.prop(get_brush_color_owner(context), 'color', text="")
+        row.prop(get_brush_color_owner(context), 'secondary_color', text="")
         row.separator()
         row.operator('vertexcolormaster.brush_colors_flip', text="", icon='FILE_REFRESH')
         row = col.row(align=False)

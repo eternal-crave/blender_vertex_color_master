@@ -212,7 +212,7 @@ class VERTEXCOLORMASTER_OT_Gradient(bpy.types.Operator):
         if self._handle is None:
             if event.type == 'LEFTMOUSE':
                 # Store the foreground and background color for redo
-                brush = context.tool_settings.vertex_paint.brush
+                brush = get_brush_color_owner(context)
                 self.start_color = brush.color
                 self.end_color = brush.secondary_color
 
@@ -1119,6 +1119,9 @@ class VERTEXCOLORMASTER_OT_EditBrushSettings(bpy.types.Operator):
         return obj is not None and obj.mode == 'VERTEX_PAINT' and obj.type == 'MESH'
 
     def execute(self, context):
+        if bpy.app.version >= (4, 3, 0):
+            return self.execute_brush_assets(context)
+
         # In case the user is using another brush, always revert to Draw
         # to avoid messing up the settings of other brushes.
         brush = bpy.data.brushes['Draw']
@@ -1131,10 +1134,41 @@ class VERTEXCOLORMASTER_OT_EditBrushSettings(bpy.types.Operator):
             brush.blend = self.blend_mode
 
         # Copy brush colors
-        prev_brush = context.tool_settings.vertex_paint.brush
+        prev_brush = get_brush_color_owner(context)
         brush.color = prev_brush.color
         brush.secondary_color = prev_brush.secondary_color
         context.tool_settings.vertex_paint.brush = brush
+
+        return {'FINISHED'}
+
+    # Blender 4.3+ brushes are assets: the active brush can't be assigned
+    # directly and vertex_tool was renamed to vertex_brush_type.
+    def execute_brush_assets(self, context):
+        paint = context.tool_settings.vertex_paint
+        prev_brush = paint.brush
+        prev_colors = (tuple(prev_brush.color), tuple(prev_brush.secondary_color)) if prev_brush else None
+
+        def activate(name):
+            bpy.ops.brush.asset_activate(
+                asset_library_type='ESSENTIALS',
+                relative_asset_identifier="brushes/essentials_brushes-mesh_vertex.blend/Brush/" + name)
+
+        try:
+            if self.blend_mode == 'BLUR':
+                activate("Blur")
+            elif prev_brush is None or prev_brush.vertex_brush_type != 'DRAW':
+                activate("Paint Hard")
+        except RuntimeError as e:
+            self.report({'ERROR'}, "Could not activate brush: {0}".format(e))
+            return {'CANCELLED'}
+
+        brush = paint.brush
+        if self.blend_mode != 'BLUR':
+            brush.blend = self.blend_mode
+
+        # Only needed when unified color is off, since colors then live on the brush
+        if prev_colors and brush != prev_brush:
+            brush.color, brush.secondary_color = prev_colors
 
         return {'FINISHED'}
 
@@ -1209,7 +1243,7 @@ class VERTEXCOLORMASTER_OT_IsolateChannel(bpy.types.Operator):
 
         copy_channel(mesh, vcol, iso_vcol, channel_idx, channel_idx, dst_all_channels=True, alpha_mode='FILL')
         mesh.vertex_colors.active = iso_vcol
-        brush = context.tool_settings.vertex_paint.brush
+        brush = get_brush_color_owner(context)
         settings.brush_color = brush.color
         settings.brush_secondary_color = brush.secondary_color
         brush.color = [settings.brush_value_isolate] * 3
@@ -1245,7 +1279,7 @@ class VERTEXCOLORMASTER_OT_ApplyIsolatedChannel(bpy.types.Operator):
 
         iso_vcol = mesh.vertex_colors.active
 
-        brush = context.tool_settings.vertex_paint.brush
+        brush = get_brush_color_owner(context)
         brush.color = settings.brush_color
         brush.secondary_color = settings.brush_secondary_color
 
@@ -1283,7 +1317,7 @@ class VERTEXCOLORMASTER_OT_FlipBrushColors(bpy.types.Operator):
         return (obj := bpy.context.object) and obj.mode == "VERTEX_PAINT"
 
     def execute(self, context):
-        brush = context.tool_settings.vertex_paint.brush
+        brush = get_brush_color_owner(context)
         settings = context.scene.vertex_color_master_settings
 
         obj = context.active_object

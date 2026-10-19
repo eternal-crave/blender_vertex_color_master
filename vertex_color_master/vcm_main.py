@@ -41,12 +41,12 @@ class VertexColorMasterProperties(bpy.types.PropertyGroup):
         if blue_id in active_channels:
             draw_color[2] = 1.0
 
-        context.tool_settings.vertex_paint.brush.color = draw_color
+        get_brush_color_owner(context).color = draw_color
 
         return None
 
     def update_brush_value_isolate(self, context):
-        brush = context.tool_settings.vertex_paint.brush
+        brush = get_brush_color_owner(context)
         v1 = self.brush_value_isolate
         v2 = self.brush_secondary_value_isolate
         brush.color = Color((v1, v1, v1))
@@ -55,7 +55,7 @@ class VertexColorMasterProperties(bpy.types.PropertyGroup):
         return None
 
     def toggle_grayscale(self, context):
-        brush = context.tool_settings.vertex_paint.brush
+        brush = get_brush_color_owner(context)
 
         if self.use_grayscale:
             self.brush_color = brush.color

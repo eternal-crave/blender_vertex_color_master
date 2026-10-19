@@ -55,3 +55,13 @@ default_brush_name = 'Draw' # Changed to Add in 2.81 for some reason
 
  # VCM-ISO_<CHANNEL_ID>_<VCOL_ID> ex. VCM-ISO_R_Col
 isolate_mode_name_prefix = 'VCM-ISO'
+
+# Blender 4.x+ paints with the unified color by default, ignoring brush.color.
+# Return whichever object actually holds the active paint colors.
+def get_brush_color_owner(context):
+    paint = context.tool_settings.vertex_paint
+    ups = getattr(paint, 'unified_paint_settings', None) \
+        or getattr(context.tool_settings, 'unified_paint_settings', None)
+    if ups is not None and getattr(ups, 'use_unified_color', False):
+        return ups
+    return paint.brush
