@@ -157,7 +157,26 @@ class VERTEXCOLORMASTER_OT_Gradient(bpy.types.Operator):
             c1_val = start_color.v
             val_separation = end_color.v - c1_val
 
-        color_layer = bm.loops.layers.color.active
+        # Write to the active color attribute, whatever its domain and type
+        attr = mesh.color_attributes.active_color
+        if attr is None:
+            bm.free()
+            self.report({'ERROR'}, "Mesh has no active color attribute")
+            return
+        layers = bm.verts.layers if attr.domain == 'POINT' else bm.loops.layers
+        layers = layers.float_color if attr.data_type == 'FLOAT_COLOR' else layers.color
+        color_layer = layers.get(attr.name)
+
+        # Brush colors are sRGB before Blender 5.0 and scene linear after;
+        # byte attributes store sRGB, float attributes store linear.
+        brush_is_linear = get_brush_color_owner(context).bl_rna.properties['color'].subtype == 'COLOR'
+        target_is_linear = attr.data_type == 'FLOAT_COLOR'
+        def to_target(c):
+            if brush_is_linear and not target_is_linear:
+                return c.from_scene_linear_to_srgb()
+            if target_is_linear and not brush_is_linear:
+                return c.from_srgb_to_scene_linear()
+            return c
 
         for data in vertex_data:
             vertex = data[0]
@@ -183,6 +202,16 @@ class VERTEXCOLORMASTER_OT_Gradient(bpy.types.Operator):
                 color.r = start_color[0] + (end_color[0] - start_color[0]) * t
                 color.g = start_color[1] + (end_color[1] - start_color[1]) * t
                 color.b = start_color[2] + (end_color[2] - start_color[2]) * t
+
+            color = to_target(color)
+
+            if attr.domain == 'POINT':
+                if mesh.use_paint_mask and not any(f.select for f in vertex.link_faces):
+                    continue
+                new_color = vertex[color_layer]
+                new_color[:3] = color
+                vertex[color_layer] = new_color
+                continue
 
             if mesh.use_paint_mask: # Masking by face
                 face_loops = [loop for loop in vertex.link_loops if loop.face.select] # Get only loops that belong to selected faces
